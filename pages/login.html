@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login — SportVest Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+
+<div class="login-wrap">
+  <div class="login-card">
+
+    <div class="login-logo"><i class="ti ti-package"></i></div>
+    <div class="login-title">Admin portal</div>
+    <div class="login-sub">Sign in to your account to continue</div>
+
+    <div id="error-banner" class="login-error" style="display:none;"></div>
+
+    <div class="form-group">
+      <label class="form-label" for="username">Username</label>
+      <input class="form-input" type="text" id="username" placeholder="Enter your username" autocomplete="username">
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="password">Password</label>
+      <div class="password-wrap">
+        <input class="form-input" type="password" id="password" placeholder="Enter your password" autocomplete="current-password">
+        <button type="button" class="password-toggle" id="toggle-password" aria-label="Toggle password visibility">
+          <i class="ti ti-eye" id="toggle-icon"></i>
+        </button>
+      </div>
+    </div>
+
+    <div style="margin-top:1.25rem;">
+      <button class="btn btn-primary btn-full" id="login-btn">
+        <i class="ti ti-login"></i> Sign in
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
+<script src="../js/services/config.js"></script>
+<script src="../js/services/serverBase.js"></script>
+<script src="../js/services/user.js"></script>
+<script src="../js/ui.js"></script>
+
+<script>
+  // If already authenticated skip to products
+  (async () => {
+    const token = ServerBase.getAccessToken();
+    if (token && await ServerBase.amAuthenticated()) {
+      window.location.replace('products.html');
+    }
+  })();
+
+  const usernameEl  = document.getElementById('username');
+  const passwordEl  = document.getElementById('password');
+  const loginBtn    = document.getElementById('login-btn');
+  const errorBanner = document.getElementById('error-banner');
+
+  document.getElementById('toggle-password').addEventListener('click', () => {
+    const isPw = passwordEl.type === 'password';
+    passwordEl.type = isPw ? 'text' : 'password';
+    document.getElementById('toggle-icon').className = isPw ? 'ti ti-eye-off' : 'ti ti-eye';
+  });
+
+  function showError(msg) { errorBanner.textContent = msg; errorBanner.style.display = 'flex'; }
+  function clearError()   { errorBanner.style.display = 'none'; errorBanner.textContent = ''; }
+
+  async function handleLogin() {
+    clearError();
+    const username = usernameEl.value.trim();
+    const password = passwordEl.value;
+    if (!username || !password) { showError('Please enter your username and password.'); return; }
+
+    loginBtn.disabled = true;
+    loginBtn.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 0.7s linear infinite"></i> Signing in…';
+
+    try {
+      const passwordHash = CryptoJS.SHA256(password).toString(CryptoJS.enc.Hex);
+      const response = await User.authUser({ name: username, passwordHash, password });
+      if (response && response.meta && response.meta.success) {
+        ServerBase.setAccessToken(response.data);
+        window.location.replace('products.html');
+        return;
+      }
+      showError(response?.meta?.message || 'Invalid username or password.');
+    } catch (err) {
+      showError('A network error occurred. Please try again.');
+    } finally {
+      loginBtn.disabled = false;
+      loginBtn.innerHTML = '<i class="ti ti-login"></i> Sign in';
+    }
+  }
+
+  loginBtn.addEventListener('click', handleLogin);
+  [usernameEl, passwordEl].forEach(el => el.addEventListener('keydown', e => { if (e.key === 'Enter') handleLogin(); }));
+</script>
+
+<style>
+  .login-error {
+    align-items: center;
+    gap: 8px;
+    background: var(--danger-soft);
+    border: 0.5px solid rgba(226,75,74,0.3);
+    border-radius: var(--r-sm);
+    color: var(--danger);
+    font-size: 12.5px;
+    padding: 0.5rem 0.75rem;
+    margin-bottom: 1rem;
+  }
+  .password-wrap { position: relative; }
+  .password-wrap .form-input { padding-right: 2.5rem; }
+  .password-toggle {
+    position: absolute; right: 0.5rem; top: 50%; transform: translateY(-50%);
+    background: transparent; border: none; color: var(--text-3); cursor: pointer;
+    padding: 4px; display: flex; align-items: center;
+  }
+  .password-toggle:hover { color: var(--text-2); }
+  .password-toggle i { font-size: 16px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+
+</body>
+</html>

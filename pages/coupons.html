@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Coupons — SportVest Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+
+<div class="shell">
+  <div id="sidebar-mount"></div>
+
+  <div class="main">
+    <div class="topbar">
+      <button class="hamburger-btn" id="hamburger-btn" aria-label="Open menu"><i class="ti ti-menu-2"></i></button>
+      <div>
+        <div class="topbar-title">Coupons</div>
+        <div class="topbar-sub">Discount codes and promotions</div>
+      </div>
+    </div>
+
+    <div class="content" style="display:flex;align-items:center;justify-content:center;flex:1;">
+      <div class="placeholder-wrap">
+        <div class="placeholder-icon amber"><i class="ti ti-ticket"></i></div>
+        <div class="placeholder-title">Coupons coming soon</div>
+        <p class="placeholder-sub">
+          Coupon and discount code management is being built out.
+          Backend support is on the way — this page will be wired up once it's ready.
+        </p>
+        <div class="placeholder-pill amber"><i class="ti ti-clock" style="font-size:14px;"></i> Under construction</div>
+        <div style="margin-top:1.5rem;">
+          <a class="btn btn-ghost" href="products.html"><i class="ti ti-arrow-left"></i> Back to products</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="../js/services/config.js"></script>
+<script src="../js/services/serverBase.js"></script>
+<script src="../js/ui.js"></script>
+
+<script>
+  (async () => {
+    const authed = await ServerBase.requireAuth();
+    if (!authed) return;
+    UI.renderSidebar();
+  })();
+</script>
+
+</body>
+</html>

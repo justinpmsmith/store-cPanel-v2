@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Edit Product — SportVest Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+
+<div class="shell">
+  <div id="sidebar-mount"></div>
+
+  <div class="main">
+    <div class="topbar">
+      <button class="hamburger-btn" id="hamburger-btn" aria-label="Open menu"><i class="ti ti-menu-2"></i></button>
+      <div>
+        <div class="topbar-title">Edit product</div>
+        <div class="topbar-sub" id="topbar-sub">Loading…</div>
+      </div>
+      <div class="topbar-actions">
+        <a class="btn btn-ghost" href="products.html"><i class="ti ti-arrow-left"></i> Back</a>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="form-wrap">
+
+        <div id="loading-state">
+          <div class="empty-state" style="padding:4rem 1rem;">
+            <i class="ti ti-loader-2" style="animation:spin 0.7s linear infinite"></i>
+            <p>Loading product…</p>
+          </div>
+        </div>
+
+        <div class="form-card" id="form-card" style="display:none;">
+
+          <div class="form-row2">
+            <div class="form-group" style="margin:0">
+              <label class="form-label" for="product-name">Product name</label>
+              <input class="form-input" type="text" id="product-name">
+            </div>
+            <div class="form-group" style="margin:0">
+              <label class="form-label" for="prod-code">Product code</label>
+              <input class="form-input" type="text" id="prod-code" disabled title="Product code cannot be changed">
+            </div>
+          </div>
+
+          <div class="form-row2">
+            <div class="form-group" style="margin:0">
+              <label class="form-label" for="category">Category</label>
+              <select id="category" class="form-select"></select>
+            </div>
+            <div class="form-group" style="margin:0">
+              <label class="form-label" for="price">Price ($)</label>
+              <input class="form-input" type="number" id="price" min="0" step="0.01">
+            </div>
+          </div>
+
+          <div class="form-row2">
+            <div class="form-group" style="margin:0">
+              <label class="form-label" for="quantity">Units in stock</label>
+              <input class="form-input" type="number" id="quantity" min="0">
+            </div>
+            <div></div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="description">Description</label>
+            <textarea class="form-textarea" id="description"></textarea>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Current images</label>
+            <div class="thumb-row" id="existing-images"></div>
+            <div class="text-hint text-sm mt-2" id="existing-images-hint" style="display:none;">No existing images.</div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Upload new images <span class="text-hint" style="font-size:11px;margin-left:4px;">(replaces all existing)</span></label>
+            <div class="dropzone" id="image-dropzone">
+              <i class="ti ti-photo-up"></i>
+              <div class="dropzone-text">Drop images here or <span class="link">browse files</span></div>
+              <div class="dropzone-hint">PNG, JPG — up to 10 MB each · multiple files supported</div>
+            </div>
+            <div class="thumb-row" id="image-previews"></div>
+          </div>
+
+          <div class="form-group" id="existing-doc-group">
+            <label class="form-label">Current document</label>
+            <div id="existing-doc-chip"></div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Upload new document <span class="text-hint" style="font-size:11px;margin-left:4px;">(PDF, optional — replaces existing)</span></label>
+            <div class="dropzone" id="pdf-dropzone">
+              <i class="ti ti-file-type-pdf"></i>
+              <div class="dropzone-text">Drop a PDF here or <span class="link">browse files</span></div>
+              <div class="dropzone-hint">One PDF only</div>
+            </div>
+            <div id="pdf-chip-container"></div>
+          </div>
+
+          <div class="form-actions">
+            <button class="btn btn-primary" id="save-btn"><i class="ti ti-check"></i> Save changes</button>
+            <button class="btn btn-danger" id="delete-btn"><i class="ti ti-trash"></i> Delete product</button>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="../js/services/config.js"></script>
+<script src="../js/services/serverBase.js"></script>
+<script src="../js/services/product.js"></script>
+<script src="../js/ui.js"></script>
+
+<script>
+  let prodCode        = '';
+  let newImageFiles   = [];
+  let newDocumentFile = null;
+  let categoryDropdown;
+
+  (async () => {
+    const authed = await ServerBase.requireAuth();
+    if (!authed) return;
+    prodCode = UI.getParam('prodCode');
+    if (!prodCode) { UI.toast('No product code provided', 'error'); setTimeout(() => window.location.replace('products.html'), 1500); return; }
+    UI.renderSidebar();
+    await Promise.all([loadCategories(), loadProduct()]);
+    categoryDropdown = UI.initDropdown('category', { placeholder: 'Select category…' });
+    initDropzones();
+  })();
+
+  async function loadCategories() {
+    const resp = await Product.getCategoryNames();
+    if (resp && resp.meta.success) {
+      const select = document.getElementById('category');
+      (resp.data || []).sort().forEach(cat => {
+        const opt = document.createElement('option');
+        opt.value = cat; opt.textContent = cat;
+        select.appendChild(opt);
+      });
+    }
+  }
+
+  async function loadProduct() {
+    const resp = await Product.getProductByProdCode(prodCode);
+    if (!resp || !resp.meta.success || !resp.data) {
+      UI.toast('Product not found', 'error');
+      setTimeout(() => window.location.replace('products.html'), 1500);
+      return;
+    }
+    const product = resp.data;
+    document.getElementById('topbar-sub').textContent   = `${product.prodCode} — ${product.name}`;
+    document.getElementById('product-name').value       = product.name || '';
+    document.getElementById('prod-code').value          = product.prodCode || '';
+    document.getElementById('price').value              = product.price || 0;
+    document.getElementById('quantity').value           = product.quantity || 0;
+
+    // Set category after options load
+    const trySetCategory = () => {
+      const select = document.getElementById('category');
+      Array.from(select.options).forEach(opt => { if (opt.value === product.category) opt.selected = true; });
+      if (categoryDropdown) categoryDropdown.refresh();
+    };
+    trySetCategory();
+    setTimeout(trySetCategory, 300);
+
+    try { const info = JSON.parse(product.info || '{}'); document.getElementById('description').value = info.description || ''; } catch {}
+
+    // Existing images
+    const existingImagesEl   = document.getElementById('existing-images');
+    const existingImagesHint = document.getElementById('existing-images-hint');
+    let photos = [];
+    try { photos = typeof product.photos === 'string' ? JSON.parse(product.photos) : (product.photos || []); } catch {}
+    if (photos.length > 0) {
+      photos.forEach(url => {
+        const thumb = document.createElement('div');
+        thumb.className = 'thumb';
+        thumb.innerHTML = `<img src="${url}" alt="Product image" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;">`;
+        existingImagesEl.appendChild(thumb);
+      });
+    } else { existingImagesHint.style.display = 'block'; }
+
+    // Existing document
+    const existingDocGroup = document.getElementById('existing-doc-group');
+    const existingDocChip  = document.getElementById('existing-doc-chip');
+    if (product.document) {
+      const filename = product.document.split('/').pop();
+      existingDocChip.innerHTML = `
+        <div class="pdf-chip">
+          <i class="ti ti-file-type-pdf"></i>
+          <span>${filename}</span>
+          <a href="${product.document}" target="_blank" class="pdf-remove ti ti-external-link" title="Open" style="color:var(--accent);"></a>
+        </div>`;
+    } else { existingDocGroup.style.display = 'none'; }
+
+    document.getElementById('loading-state').style.display = 'none';
+    document.getElementById('form-card').style.display     = 'block';
+  }
+
+  function initDropzones() {
+    UI.initDropzone({
+      dropzoneEl: document.getElementById('image-dropzone'),
+      previewEl:  document.getElementById('image-previews'),
+      accept: 'image/*', multiple: true,
+      onFiles: files => { newImageFiles = files; },
+    });
+    UI.initDropzone({
+      dropzoneEl: document.getElementById('pdf-dropzone'),
+      previewEl:  document.getElementById('pdf-chip-container'),
+      accept: 'application/pdf', multiple: false,
+      onFiles: files => {
+        newDocumentFile = files[0] || null;
+        if (newDocumentFile) UI.setPdfChip(document.getElementById('pdf-chip-container'), newDocumentFile.name, () => { newDocumentFile = null; });
+      },
+    });
+  }
+
+  function validate() {
+    const name     = document.getElementById('product-name').value.trim();
+    const category = document.getElementById('category').value;
+    const price    = document.getElementById('price').value;
+    const quantity = document.getElementById('quantity').value;
+    if (!name)     { UI.toast('Product name is required', 'warning'); return null; }
+    if (!category) { UI.toast('Please select a category', 'warning'); return null; }
+    if (!price || Number(price) < 0) { UI.toast('Please enter a valid price', 'warning'); return null; }
+    if (quantity === '' || Number(quantity) < 0) { UI.toast('Please enter a valid stock quantity', 'warning'); return null; }
+    return { name, prodCode, category, price: Number(price), quantity: Number(quantity), info: JSON.stringify({ description: document.getElementById('description').value.trim() }) };
+  }
+
+  document.getElementById('save-btn').addEventListener('click', async () => {
+    const data = validate();
+    if (!data) return;
+    const btn = document.getElementById('save-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 0.7s linear infinite"></i> Saving…';
+    UI.showSpinner();
+    try {
+      const response = await Product.updateProduct(data, newImageFiles, newDocumentFile);
+      if (response && response.meta && response.meta.success) {
+        UI.toast('Product updated successfully', 'success');
+        setTimeout(() => window.location.replace('products.html'), 1500);
+        return;
+      }
+      UI.toast(response?.meta?.message || 'Failed to update product.', 'error');
+    } catch { UI.toast('A network error occurred', 'error'); }
+    finally { UI.hideSpinner(); btn.disabled = false; btn.innerHTML = '<i class="ti ti-check"></i> Save changes'; }
+  });
+
+  document.getElementById('delete-btn').addEventListener('click', () => {
+    UI.confirmDelete(
+      `Are you sure you want to delete <strong>${document.getElementById('product-name').value}</strong>? This cannot be undone.`,
+      async () => {
+        UI.showSpinner();
+        try {
+          const response = await Product.deleteProductByProdCode(prodCode);
+          if (response && response.meta && response.meta.success) {
+            UI.toast('Product deleted', 'success');
+            setTimeout(() => window.location.replace('products.html'), 1500);
+            return;
+          }
+          UI.toast(response?.meta?.message || 'Failed to delete product', 'error');
+        } catch { UI.toast('A network error occurred', 'error'); }
+        finally { UI.hideSpinner(); }
+      }
+    );
+  });
+</script>
+
+<style>
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+
+</body>
+</html>

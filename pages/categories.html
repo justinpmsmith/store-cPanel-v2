@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Categories — SportVest Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+
+<div class="shell">
+  <div id="sidebar-mount"></div>
+
+  <div class="main">
+    <div class="topbar">
+      <button class="hamburger-btn" id="hamburger-btn" aria-label="Open menu"><i class="ti ti-menu-2"></i></button>
+      <div>
+        <div class="topbar-title">Categories</div>
+        <div class="topbar-sub">Organise your product ranges</div>
+      </div>
+      <div class="topbar-actions">
+        <a class="btn btn-primary" href="add-category.html"><i class="ti ti-plus"></i> Add category</a>
+      </div>
+    </div>
+
+    <div class="content">
+      <div id="loading-state">
+        <div class="empty-state" style="padding:4rem 1rem;">
+          <i class="ti ti-loader-2" style="animation:spin 0.7s linear infinite"></i>
+          <p>Loading categories…</p>
+        </div>
+      </div>
+      <div class="cat-grid" id="cat-grid" style="display:none;"></div>
+    </div>
+  </div>
+</div>
+
+<script src="../js/services/config.js"></script>
+<script src="../js/services/serverBase.js"></script>
+<script src="../js/services/product.js"></script>
+<script src="../js/ui.js"></script>
+
+<script>
+  (async () => {
+    const authed = await ServerBase.requireAuth();
+    if (!authed) return;
+    UI.renderSidebar();
+    await loadCategories();
+  })();
+
+  async function loadCategories() {
+    try {
+      const namesResp = await Product.getCategoryNames();
+      if (!namesResp || !namesResp.meta.success) { UI.toast('Failed to load categories', 'error'); return; }
+      const names = (namesResp.data || []).sort();
+      const grid  = document.getElementById('cat-grid');
+      document.getElementById('loading-state').style.display = 'none';
+      grid.style.display = 'grid';
+      if (names.length === 0) {
+        grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;padding:3rem 1rem;"><i class="ti ti-tag-off"></i><p>No categories yet.</p></div>`;
+        appendNewCard(grid);
+        return;
+      }
+      for (const name of names) {
+        const catResp = await Product.getCategoryByName(name);
+        appendCategoryCard(grid, name, catResp?.data?.photo || null);
+      }
+      appendNewCard(grid);
+    } catch (err) {
+      console.error('Load categories error:', err);
+      UI.toast('A network error occurred', 'error');
+    }
+  }
+
+  function appendCategoryCard(grid, name, photoUrl) {
+    const card = document.createElement('div');
+    card.className = 'cat-card';
+    card.innerHTML = `
+      <div class="cat-img">${photoUrl ? `<img src="${photoUrl}" alt="${name}">` : `<i class="ti ti-tag"></i>`}</div>
+      <div class="cat-name">${name}</div>
+      <a class="cat-edit ti ti-edit" href="edit-category.html?category=${encodeURIComponent(name)}" title="Edit ${name}"></a>
+    `;
+    card.addEventListener('click', e => {
+      if (e.target.classList.contains('cat-edit')) return;
+      window.location.href = `products.html?category=${encodeURIComponent(name)}`;
+    });
+    grid.appendChild(card);
+  }
+
+  function appendNewCard(grid) {
+    const card = document.createElement('a');
+    card.href = 'add-category.html';
+    card.className = 'cat-card cat-new';
+    card.innerHTML = `<i class="ti ti-plus"></i><span>New category</span>`;
+    grid.appendChild(card);
+  }
+</script>
+
+<style>
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+
+</body>
+</html>

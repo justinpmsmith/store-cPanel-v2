@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Products — SportVest Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+
+<div class="shell">
+  <div id="sidebar-mount"></div>
+
+  <div class="main">
+    <div class="topbar">
+      <button class="hamburger-btn" id="hamburger-btn" aria-label="Open menu">
+        <i class="ti ti-menu-2"></i>
+      </button>
+      <div>
+        <div class="topbar-title">Products</div>
+        <div class="topbar-sub">Manage your product catalogue</div>
+      </div>
+      <div class="topbar-actions">
+        <a class="btn btn-ghost" href="add-category.html"><i class="ti ti-tag"></i> Add category</a>
+        <a class="btn btn-primary" href="add-product.html"><i class="ti ti-plus"></i> Add product</a>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <div class="stats-row">
+        <div class="stat-card">
+          <div class="stat-top"><div class="stat-label">Total products</div><div class="stat-icon"><i class="ti ti-box"></i></div></div>
+          <div class="stat-value" id="stat-total">—</div>
+          <div class="stat-sub" id="stat-total-sub">Loading…</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-top"><div class="stat-label">Categories</div><div class="stat-icon"><i class="ti ti-tag"></i></div></div>
+          <div class="stat-value" id="stat-categories">—</div>
+          <div class="stat-sub">Across all ranges</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-top"><div class="stat-label">Sold this month</div><div class="stat-icon"><i class="ti ti-receipt"></i></div></div>
+          <div class="stat-value" id="stat-sold">—</div>
+          <div class="stat-sub up" id="stat-sold-sub">Loading…</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-top"><div class="stat-label">Low stock</div><div class="stat-icon"><i class="ti ti-alert-triangle"></i></div></div>
+          <div class="stat-value text-amber" id="stat-low">—</div>
+          <div class="stat-sub warn">Units below 3</div>
+        </div>
+      </div>
+
+      <div class="section-hdr">
+        <div class="section-title" id="table-heading">All products</div>
+        <div class="filter-row">
+          <div class="search-box">
+            <i class="ti ti-search"></i>
+            <input type="text" id="search-input" placeholder="Search products…">
+          </div>
+          <!-- native select — replaced by custom dropdown via JS -->
+          <select id="category-filter" class="form-select">
+            <option value="">All categories</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="table-card">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:44px;"></th>
+                <th>Product</th>
+                <th>Code</th>
+                <th>Category</th>
+                <th>Price</th>
+                <th>Stock</th>
+                <th style="width:44px;"></th>
+              </tr>
+            </thead>
+            <tbody id="product-tbody">
+              <tr><td colspan="7">
+                <div class="empty-state">
+                  <i class="ti ti-loader-2" style="animation:spin 0.7s linear infinite"></i>
+                  <p>Loading products…</p>
+                </div>
+              </td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="../js/services/config.js"></script>
+<script src="../js/services/serverBase.js"></script>
+<script src="../js/services/product.js"></script>
+<script src="../js/ui.js"></script>
+
+<script>
+  let allProducts   = [];
+  let categoryNames = [];
+  let soldProducts  = [];
+  let categoryDropdown;
+
+  (async () => {
+    const authed = await ServerBase.requireAuth();
+    if (!authed) return;
+    UI.renderSidebar();
+    categoryDropdown = UI.initDropdown('category-filter', { placeholder: 'All categories' });
+    await init();
+  })();
+
+  async function init() {
+    try {
+      const [catResp, soldResp] = await Promise.all([
+        Product.getCategoryNames(),
+        Product.getSoldProducts(),
+      ]);
+
+      if (catResp && catResp.meta.success) {
+        categoryNames = (catResp.data || []).sort();
+        populateCategoryFilter(categoryNames);
+        document.getElementById('stat-categories').textContent = categoryNames.length;
+      }
+
+      if (soldResp && soldResp.meta.success) {
+        soldProducts = soldResp.data || [];
+        const now   = new Date();
+        const month = soldProducts.filter(s => {
+          const d = new Date(s.dateSold);
+          return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+        });
+        document.getElementById('stat-sold').textContent     = month.length;
+        document.getElementById('stat-sold-sub').textContent = `${soldProducts.length} total all time`;
+      }
+
+      await loadProducts();
+    } catch (err) {
+      console.error('Init error:', err);
+      UI.toast('Failed to load page data', 'error');
+    }
+  }
+
+  async function loadProducts() {
+    const category = document.getElementById('category-filter').value;
+    const tbody    = document.getElementById('product-tbody');
+
+    tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state">
+      <i class="ti ti-loader-2" style="animation:spin 0.7s linear infinite"></i>
+      <p>Loading products…</p>
+    </div></td></tr>`;
+
+    allProducts = [];
+
+    try {
+      let prodCodes = [];
+
+      if (category) {
+        const resp = await Product.getProdCodesByCategory(category);
+        prodCodes  = (resp && resp.data) ? resp.data : [];
+        document.getElementById('table-heading').textContent = category;
+      } else {
+        document.getElementById('table-heading').textContent = 'All products';
+        for (const cat of categoryNames) {
+          const resp = await Product.getProdCodesByCategory(cat);
+          if (resp && resp.data) prodCodes.push(...resp.data);
+        }
+      }
+
+      if (prodCodes.length === 0) { renderEmpty(); updateStats(); return; }
+
+      tbody.innerHTML = '';
+
+      for (const prodCode of prodCodes) {
+        const resp = await Product.getProductByProdCode(prodCode);
+        if (resp && resp.data) {
+          allProducts.push(resp.data);
+          appendProductRow(resp.data);
+        }
+      }
+
+      updateStats();
+      applyFilter();
+    } catch (err) {
+      console.error('Load products error:', err);
+      UI.toast('Failed to load products', 'error');
+      renderEmpty();
+    }
+  }
+
+  function appendProductRow(product) {
+    const tbody = document.getElementById('product-tbody');
+    const stock = Number(product.quantity) || 0;
+    const stockBadge = stock <= 0
+      ? `<span class="badge b-danger">${stock} units</span>`
+      : stock <= 2
+        ? `<span class="badge b-amber">${stock} units</span>`
+        : `<span class="badge b-success">${stock} units</span>`;
+
+    let thumbHtml;
+    try {
+      const photos = typeof product.photos === 'string' ? JSON.parse(product.photos) : (product.photos || []);
+      thumbHtml = photos.length > 0
+        ? `<div class="prod-thumb"><img src="${photos[0]}" alt="${product.name}"></div>`
+        : `<div class="prod-thumb"><i class="ti ti-shirt"></i></div>`;
+    } catch { thumbHtml = `<div class="prod-thumb"><i class="ti ti-shirt"></i></div>`; }
+
+    let description = '';
+    try { const info = JSON.parse(product.info || '{}'); description = info.description || ''; } catch {}
+
+    const tr = document.createElement('tr');
+    tr.dataset.name     = product.name.toLowerCase();
+    tr.dataset.prodcode = product.prodCode.toLowerCase();
+    tr.dataset.category = (product.category || '').toLowerCase();
+
+    tr.innerHTML = `
+      <td>${thumbHtml}</td>
+      <td>
+        <div class="prod-cell"><div>
+          <div class="prod-name">${product.name}</div>
+          ${description ? `<div class="prod-desc">${description.substring(0,60)}${description.length>60?'…':''}</div>` : ''}
+        </div></div>
+      </td>
+      <td class="td-mono">${product.prodCode}</td>
+      <td><span class="badge b-purple">${product.category || '—'}</span></td>
+      <td>$${parseFloat(product.price).toFixed(2)}</td>
+      <td>${stockBadge}</td>
+      <td><a class="icon-btn" href="edit-product.html?prodCode=${encodeURIComponent(product.prodCode)}" title="Edit"><i class="ti ti-edit"></i></a></td>
+    `;
+    tbody.appendChild(tr);
+  }
+
+  function renderEmpty() {
+    document.getElementById('product-tbody').innerHTML = `<tr><td colspan="7">
+      <div class="empty-state"><i class="ti ti-box-off"></i><p>No products found.</p></div>
+    </td></tr>`;
+  }
+
+  function updateStats() {
+    document.getElementById('stat-total').textContent     = allProducts.length;
+    document.getElementById('stat-total-sub').textContent = `Across ${categoryNames.length} categories`;
+    document.getElementById('stat-low').textContent       = allProducts.filter(p => Number(p.quantity) <= 2).length;
+  }
+
+  function populateCategoryFilter(categories) {
+    const select = document.getElementById('category-filter');
+    categories.forEach(cat => {
+      const opt = document.createElement('option');
+      opt.value = cat; opt.textContent = cat;
+      select.appendChild(opt);
+    });
+    if (categoryDropdown) categoryDropdown.refresh();
+  }
+
+  function applyFilter() {
+    const term = document.getElementById('search-input').value.toLowerCase().trim();
+    document.getElementById('product-tbody').querySelectorAll('tr[data-name]').forEach(row => {
+      const matches = !term || row.dataset.name.includes(term) || row.dataset.prodcode.includes(term) || row.dataset.category.includes(term);
+      row.style.display = matches ? '' : 'none';
+    });
+  }
+
+  document.getElementById('search-input').addEventListener('input', applyFilter);
+  document.getElementById('category-filter').addEventListener('change', () => loadProducts());
+</script>
+
+<style>
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+
+</body>
+</html>

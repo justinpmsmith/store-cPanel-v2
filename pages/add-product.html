@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Add Product — SportVest Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+
+<div class="shell">
+  <div id="sidebar-mount"></div>
+
+  <div class="main">
+    <div class="topbar">
+      <button class="hamburger-btn" id="hamburger-btn" aria-label="Open menu"><i class="ti ti-menu-2"></i></button>
+      <div>
+        <div class="topbar-title">Add product</div>
+        <div class="topbar-sub">Fill in the details below</div>
+      </div>
+      <div class="topbar-actions">
+        <a class="btn btn-ghost" href="products.html"><i class="ti ti-arrow-left"></i> Back</a>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="form-wrap">
+        <div class="form-card">
+
+          <div class="form-row2">
+            <div class="form-group" style="margin:0">
+              <label class="form-label" for="product-name">Product name</label>
+              <input class="form-input" type="text" id="product-name" placeholder="e.g. Pro Cycling Vest">
+            </div>
+            <div class="form-group" style="margin:0">
+              <label class="form-label" for="prod-code">Product code</label>
+              <input class="form-input" type="text" id="prod-code" placeholder="e.g. SV-001">
+            </div>
+          </div>
+
+          <div class="form-row2">
+            <div class="form-group" style="margin:0">
+              <label class="form-label" for="category">Category</label>
+              <select id="category" class="form-select">
+                <option value="">Select category…</option>
+              </select>
+            </div>
+            <div class="form-group" style="margin:0">
+              <label class="form-label" for="price">Price ($)</label>
+              <input class="form-input" type="number" id="price" placeholder="0.00" min="0" step="0.01">
+            </div>
+          </div>
+
+          <div class="form-row2">
+            <div class="form-group" style="margin:0">
+              <label class="form-label" for="quantity">Units in stock</label>
+              <input class="form-input" type="number" id="quantity" value="1" min="0">
+            </div>
+            <div></div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="description">Description</label>
+            <textarea class="form-textarea" id="description" placeholder="Short product description…"></textarea>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Product images</label>
+            <div class="dropzone" id="image-dropzone">
+              <i class="ti ti-photo-up"></i>
+              <div class="dropzone-text">Drop images here or <span class="link">browse files</span></div>
+              <div class="dropzone-hint">PNG, JPG — up to 10 MB each · multiple files supported</div>
+            </div>
+            <div class="thumb-row" id="image-previews"></div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Product document <span class="text-hint">(PDF, optional)</span></label>
+            <div class="dropzone" id="pdf-dropzone">
+              <i class="ti ti-file-type-pdf"></i>
+              <div class="dropzone-text">Drop a PDF here or <span class="link">browse files</span></div>
+              <div class="dropzone-hint">One PDF only</div>
+            </div>
+            <div id="pdf-chip-container"></div>
+          </div>
+
+          <div class="form-actions">
+            <button class="btn btn-primary" id="submit-btn"><i class="ti ti-check"></i> Add product</button>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="../js/services/config.js"></script>
+<script src="../js/services/serverBase.js"></script>
+<script src="../js/services/product.js"></script>
+<script src="../js/ui.js"></script>
+
+<script>
+  let imageFiles   = [];
+  let documentFile = null;
+
+  (async () => {
+    const authed = await ServerBase.requireAuth();
+    if (!authed) return;
+    UI.renderSidebar();
+    await loadCategories();
+    UI.initDropdown('category', { placeholder: 'Select category…' });
+    initDropzones();
+  })();
+
+  async function loadCategories() {
+    const resp = await Product.getCategoryNames();
+    if (resp && resp.meta.success) {
+      const select = document.getElementById('category');
+      (resp.data || []).sort().forEach(cat => {
+        const opt = document.createElement('option');
+        opt.value = cat; opt.textContent = cat;
+        select.appendChild(opt);
+      });
+    }
+  }
+
+  function initDropzones() {
+    UI.initDropzone({
+      dropzoneEl: document.getElementById('image-dropzone'),
+      previewEl:  document.getElementById('image-previews'),
+      accept: 'image/*', multiple: true,
+      onFiles: files => { imageFiles = files; },
+    });
+    UI.initDropzone({
+      dropzoneEl: document.getElementById('pdf-dropzone'),
+      previewEl:  document.getElementById('pdf-chip-container'),
+      accept: 'application/pdf', multiple: false,
+      onFiles: files => {
+        documentFile = files[0] || null;
+        if (documentFile) UI.setPdfChip(document.getElementById('pdf-chip-container'), documentFile.name, () => { documentFile = null; });
+      },
+    });
+  }
+
+  function validate() {
+    const name     = document.getElementById('product-name').value.trim();
+    const prodCode = document.getElementById('prod-code').value.trim();
+    const category = document.getElementById('category').value;
+    const price    = document.getElementById('price').value;
+    const quantity = document.getElementById('quantity').value;
+    if (!name)     { UI.toast('Product name is required', 'warning'); return null; }
+    if (!prodCode) { UI.toast('Product code is required', 'warning'); return null; }
+    if (!category) { UI.toast('Please select a category', 'warning'); return null; }
+    if (!price || Number(price) < 0) { UI.toast('Please enter a valid price', 'warning'); return null; }
+    if (quantity === '' || Number(quantity) < 0) { UI.toast('Please enter a valid stock quantity', 'warning'); return null; }
+    return { name, prodCode, category, price: Number(price), quantity: Number(quantity), info: JSON.stringify({ description: document.getElementById('description').value.trim() }) };
+  }
+
+  document.getElementById('submit-btn').addEventListener('click', async () => {
+    const data = validate();
+    if (!data) return;
+    const btn = document.getElementById('submit-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 0.7s linear infinite"></i> Saving…';
+    UI.showSpinner();
+    try {
+      const response = await Product.addProduct(data, imageFiles, documentFile);
+      if (response && response.meta && response.meta.success) {
+        UI.toast('Product added successfully', 'success');
+        setTimeout(() => window.location.replace('products.html'), 1500);
+        return;
+      }
+      UI.toast(response?.meta?.message || 'Failed to add product.', 'error');
+    } catch (err) {
+      UI.toast('A network error occurred', 'error');
+    } finally {
+      UI.hideSpinner();
+      btn.disabled = false;
+      btn.innerHTML = '<i class="ti ti-check"></i> Add product';
+    }
+  });
+</script>
+
+<style>
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+
+</body>
+</html>

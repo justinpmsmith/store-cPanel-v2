@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Add Category — SportVest Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+
+<div class="shell">
+  <div id="sidebar-mount"></div>
+
+  <div class="main">
+    <div class="topbar">
+      <button class="hamburger-btn" id="hamburger-btn" aria-label="Open menu"><i class="ti ti-menu-2"></i></button>
+      <div>
+        <div class="topbar-title">Add category</div>
+        <div class="topbar-sub">Create a new product category</div>
+      </div>
+      <div class="topbar-actions">
+        <a class="btn btn-ghost" href="categories.html"><i class="ti ti-arrow-left"></i> Back</a>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="form-wrap">
+        <div class="form-card">
+
+          <div class="form-group">
+            <label class="form-label" for="category-name">Category name</label>
+            <input class="form-input" type="text" id="category-name" placeholder="e.g. Vests">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Category image</label>
+            <div class="dropzone" id="image-dropzone">
+              <i class="ti ti-photo-up"></i>
+              <div class="dropzone-text">Drop an image here or <span class="link">browse files</span></div>
+              <div class="dropzone-hint">PNG, JPG — up to 10 MB</div>
+            </div>
+            <div class="thumb-row" id="image-previews"></div>
+          </div>
+
+          <div class="form-actions">
+            <button class="btn btn-primary" id="submit-btn"><i class="ti ti-check"></i> Add category</button>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="../js/services/config.js"></script>
+<script src="../js/services/serverBase.js"></script>
+<script src="../js/services/product.js"></script>
+<script src="../js/ui.js"></script>
+
+<script>
+  let imageFile = null;
+
+  (async () => {
+    const authed = await ServerBase.requireAuth();
+    if (!authed) return;
+    UI.renderSidebar();
+    UI.initDropzone({
+      dropzoneEl: document.getElementById('image-dropzone'),
+      previewEl:  document.getElementById('image-previews'),
+      accept: 'image/*', multiple: false,
+      onFiles: files => { imageFile = files[0] || null; },
+    });
+  })();
+
+  document.getElementById('submit-btn').addEventListener('click', async () => {
+    const name = document.getElementById('category-name').value.trim();
+    if (!name) { UI.toast('Category name is required', 'warning'); return; }
+    const btn = document.getElementById('submit-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 0.7s linear infinite"></i> Saving…';
+    UI.showSpinner();
+    try {
+      const response = await Product.addCategory(name, imageFile);
+      if (response && response.meta && response.meta.success) {
+        UI.toast('Category added successfully', 'success');
+        setTimeout(() => window.location.replace('categories.html'), 1500);
+        return;
+      }
+      UI.toast(response?.meta?.message || 'Failed to add category.', 'error');
+    } catch { UI.toast('A network error occurred', 'error'); }
+    finally { UI.hideSpinner(); btn.disabled = false; btn.innerHTML = '<i class="ti ti-check"></i> Add category'; }
+  });
+
+  document.getElementById('category-name').addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById('submit-btn').click();
+  });
+</script>
+
+<style>
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+
+</body>
+</html>

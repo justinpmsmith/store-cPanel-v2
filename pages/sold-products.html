@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sold Products — SportVest Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+
+<div class="shell">
+  <div id="sidebar-mount"></div>
+
+  <div class="main">
+    <div class="topbar">
+      <button class="hamburger-btn" id="hamburger-btn" aria-label="Open menu"><i class="ti ti-menu-2"></i></button>
+      <div>
+        <div class="topbar-title">Sold products</div>
+        <div class="topbar-sub">Order history — most recent first</div>
+      </div>
+      <div class="topbar-actions">
+        <div class="search-box">
+          <i class="ti ti-search"></i>
+          <input type="text" id="search-input" placeholder="Search orders…">
+        </div>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <div class="stats-row" style="grid-template-columns:repeat(3,1fr);">
+        <div class="stat-card">
+          <div class="stat-top"><div class="stat-label">Total sold</div><div class="stat-icon"><i class="ti ti-receipt"></i></div></div>
+          <div class="stat-value" id="stat-total">—</div>
+          <div class="stat-sub">All time</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-top"><div class="stat-label">Sold this month</div><div class="stat-icon"><i class="ti ti-calendar"></i></div></div>
+          <div class="stat-value" id="stat-month">—</div>
+          <div class="stat-sub up" id="stat-month-sub">Loading…</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-top"><div class="stat-label">Revenue this month</div><div class="stat-icon"><i class="ti ti-currency-dollar"></i></div></div>
+          <div class="stat-value" id="stat-revenue">—</div>
+          <div class="stat-sub">From completed orders</div>
+        </div>
+      </div>
+
+      <div class="table-card">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:40px;"></th>
+                <th>Customer</th>
+                <th>Product</th>
+                <th>Code</th>
+                <th>Category</th>
+                <th>Price</th>
+                <th>Date sold</th>
+                <th>Address</th>
+                <th style="width:44px;"></th>
+              </tr>
+            </thead>
+            <tbody id="sold-tbody">
+              <tr><td colspan="9">
+                <div class="empty-state">
+                  <i class="ti ti-loader-2" style="animation:spin 0.7s linear infinite"></i>
+                  <p>Loading orders…</p>
+                </div>
+              </td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="../js/services/config.js"></script>
+<script src="../js/services/serverBase.js"></script>
+<script src="../js/services/product.js"></script>
+<script src="../js/ui.js"></script>
+
+<script>
+  let allSold = [];
+  const avatarClasses = ['', 'green', 'amber', 'danger'];
+  let avatarIndex = 0;
+
+  (async () => {
+    const authed = await ServerBase.requireAuth();
+    if (!authed) return;
+    UI.renderSidebar();
+    await loadSoldProducts();
+  })();
+
+  async function loadSoldProducts() {
+    try {
+      const resp = await Product.getSoldProducts();
+      if (!resp || !resp.meta.success) { UI.toast('Failed to load sold products', 'error'); renderEmpty(); return; }
+      allSold = (resp.data || []).sort((a, b) => new Date(b.dateSold) - new Date(a.dateSold));
+      updateStats();
+      renderRows(allSold);
+    } catch (err) {
+      console.error(err);
+      UI.toast('A network error occurred', 'error');
+      renderEmpty();
+    }
+  }
+
+  function updateStats() {
+    const now   = new Date();
+    const month = allSold.filter(s => {
+      const d = new Date(s.dateSold);
+      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    });
+    const revenue  = month.reduce((sum, s) => sum + parseFloat(s.price || 0), 0);
+    const prevMonth = allSold.filter(s => {
+      const d = new Date(s.dateSold);
+      return d.getMonth() === now.getMonth() - 1 && d.getFullYear() === now.getFullYear();
+    });
+    const diff = month.length - prevMonth.length;
+    const subEl = document.getElementById('stat-month-sub');
+
+    document.getElementById('stat-total').textContent   = allSold.length;
+    document.getElementById('stat-month').textContent   = month.length;
+    document.getElementById('stat-revenue').textContent = `$${revenue.toFixed(2)}`;
+
+    if (diff > 0)      { subEl.textContent = `↑ ${diff} vs last month`;          subEl.className = 'stat-sub up'; }
+    else if (diff < 0) { subEl.textContent = `↓ ${Math.abs(diff)} vs last month`; subEl.className = 'stat-sub warn'; }
+    else               { subEl.textContent = 'Same as last month';                 subEl.className = 'stat-sub'; }
+  }
+
+  function renderRows(items) {
+    const tbody = document.getElementById('sold-tbody');
+    avatarIndex = 0;
+    if (items.length === 0) { renderEmpty(); return; }
+    tbody.innerHTML = '';
+    items.forEach(sale => {
+      const avClass  = avatarClasses[avatarIndex++ % avatarClasses.length];
+      const initials = UI.initials(sale.customerName || '?');
+      const tr = document.createElement('tr');
+      tr.dataset.search = [sale.customerName, sale.name, sale.prodCode, sale.category, sale.customerAddress].join(' ').toLowerCase();
+      tr.innerHTML = `
+        <td><div class="avatar ${avClass}" style="width:28px;height:28px;font-size:10px;">${initials}</div></td>
+        <td>${sale.customerName || '—'}</td>
+        <td>${sale.name || '—'}</td>
+        <td class="td-mono">${sale.prodCode || '—'}</td>
+        <td><span class="badge b-purple">${sale.category || '—'}</span></td>
+        <td>$${parseFloat(sale.price || 0).toFixed(2)}</td>
+        <td class="td-muted" style="font-size:12px;white-space:nowrap;">${UI.formatDate(sale.dateSold)}</td>
+        <td class="td-muted" style="font-size:12px;">${sale.customerAddress || '—'}</td>
+        <td><a class="icon-btn" href="view-sold-product.html?id=${encodeURIComponent(sale.id)}" title="View"><i class="ti ti-eye"></i></a></td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  function renderEmpty() {
+    document.getElementById('sold-tbody').innerHTML = `<tr><td colspan="9">
+      <div class="empty-state"><i class="ti ti-receipt-off"></i><p>No sold products found.</p></div>
+    </td></tr>`;
+  }
+
+  document.getElementById('search-input').addEventListener('input', function () {
+    const term = this.value.toLowerCase().trim();
+    document.getElementById('sold-tbody').querySelectorAll('tr[data-search]').forEach(row => {
+      row.style.display = (!term || row.dataset.search.includes(term)) ? '' : 'none';
+    });
+  });
+</script>
+
+<style>
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+
+</body>
+</html>

@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Edit Category — SportVest Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+
+<div class="shell">
+  <div id="sidebar-mount"></div>
+
+  <div class="main">
+    <div class="topbar">
+      <button class="hamburger-btn" id="hamburger-btn" aria-label="Open menu"><i class="ti ti-menu-2"></i></button>
+      <div>
+        <div class="topbar-title">Edit category</div>
+        <div class="topbar-sub" id="topbar-sub">Loading…</div>
+      </div>
+      <div class="topbar-actions">
+        <a class="btn btn-ghost" href="categories.html"><i class="ti ti-arrow-left"></i> Back</a>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="form-wrap">
+
+        <div id="loading-state">
+          <div class="empty-state" style="padding:4rem 1rem;">
+            <i class="ti ti-loader-2" style="animation:spin 0.7s linear infinite"></i>
+            <p>Loading category…</p>
+          </div>
+        </div>
+
+        <div class="form-card" id="form-card" style="display:none;">
+
+          <div class="form-group">
+            <label class="form-label" for="category-name">Category name</label>
+            <input class="form-input" type="text" id="category-name" disabled title="Category name cannot be changed">
+          </div>
+
+          <div class="form-group" id="existing-img-group">
+            <label class="form-label">Current image</label>
+            <div class="thumb-row" id="existing-image"></div>
+            <div class="text-hint text-sm mt-2" id="existing-img-hint" style="display:none;">No existing image.</div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Upload new image <span class="text-hint" style="font-size:11px;margin-left:4px;">(replaces existing)</span></label>
+            <div class="dropzone" id="image-dropzone">
+              <i class="ti ti-photo-up"></i>
+              <div class="dropzone-text">Drop an image here or <span class="link">browse files</span></div>
+              <div class="dropzone-hint">PNG, JPG — up to 10 MB</div>
+            </div>
+            <div class="thumb-row" id="image-previews"></div>
+          </div>
+
+          <div class="form-actions">
+            <button class="btn btn-primary" id="save-btn"><i class="ti ti-check"></i> Save changes</button>
+            <button class="btn btn-danger" id="delete-btn"><i class="ti ti-trash"></i> Delete category</button>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="../js/services/config.js"></script>
+<script src="../js/services/serverBase.js"></script>
+<script src="../js/services/product.js"></script>
+<script src="../js/ui.js"></script>
+
+<script>
+  let categoryName = '';
+  let newImageFile = null;
+
+  (async () => {
+    const authed = await ServerBase.requireAuth();
+    if (!authed) return;
+    categoryName = UI.getParam('category');
+    if (!categoryName) { UI.toast('No category specified', 'error'); setTimeout(() => window.location.replace('categories.html'), 1500); return; }
+    UI.renderSidebar();
+    await loadCategory();
+    UI.initDropzone({
+      dropzoneEl: document.getElementById('image-dropzone'),
+      previewEl:  document.getElementById('image-previews'),
+      accept: 'image/*', multiple: false,
+      onFiles: files => { newImageFile = files[0] || null; },
+    });
+  })();
+
+  async function loadCategory() {
+    const resp = await Product.getCategoryByName(categoryName);
+    if (!resp || !resp.meta.success || !resp.data) {
+      UI.toast('Category not found', 'error');
+      setTimeout(() => window.location.replace('categories.html'), 1500);
+      return;
+    }
+    const category = resp.data;
+    document.getElementById('topbar-sub').textContent    = category.name;
+    document.getElementById('category-name').value       = category.name;
+
+    const existingImgEl   = document.getElementById('existing-image');
+    const existingImgHint = document.getElementById('existing-img-hint');
+    if (category.photo) {
+      const thumb = document.createElement('div');
+      thumb.className = 'thumb';
+      thumb.style.cssText = 'width:72px;height:72px;';
+      thumb.innerHTML = `<img src="${category.photo}" alt="${category.name}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;">`;
+      existingImgEl.appendChild(thumb);
+    } else { existingImgHint.style.display = 'block'; }
+
+    document.getElementById('loading-state').style.display = 'none';
+    document.getElementById('form-card').style.display     = 'block';
+  }
+
+  document.getElementById('save-btn').addEventListener('click', async () => {
+    const btn = document.getElementById('save-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 0.7s linear infinite"></i> Saving…';
+    UI.showSpinner();
+    try {
+      const response = await Product.updateCategory(categoryName, newImageFile);
+      if (response && response.meta && response.meta.success) {
+        UI.toast('Category updated successfully', 'success');
+        setTimeout(() => window.location.replace('categories.html'), 1500);
+        return;
+      }
+      UI.toast(response?.meta?.message || 'Failed to update category.', 'error');
+    } catch { UI.toast('A network error occurred', 'error'); }
+    finally { UI.hideSpinner(); btn.disabled = false; btn.innerHTML = '<i class="ti ti-check"></i> Save changes'; }
+  });
+
+  document.getElementById('delete-btn').addEventListener('click', () => {
+    UI.confirmDelete(
+      `Are you sure you want to delete the <strong>${categoryName}</strong> category? This cannot be undone.`,
+      async () => {
+        UI.showSpinner();
+        try {
+          const response = await Product.deleteCategory(categoryName);
+          if (response && response.meta && response.meta.success) {
+            UI.toast('Category deleted', 'success');
+            setTimeout(() => window.location.replace('categories.html'), 1500);
+            return;
+          }
+          UI.toast(response?.meta?.message || 'Failed to delete category', 'error');
+        } catch { UI.toast('A network error occurred', 'error'); }
+        finally { UI.hideSpinner(); }
+      }
+    );
+  });
+</script>
+
+<style>
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+
+</body>
+</html>
