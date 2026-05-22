@@ -1,4 +1,4 @@
-# SportVest Admin Portal
+# Store Admin Portal
 
 Vanilla HTML/CSS/JS admin portal for managing products, categories, and sales.
 No frameworks, no build step — open in a browser and it works.
